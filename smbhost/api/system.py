@@ -4,6 +4,7 @@ Provides status checks, log retrieval, and service control endpoints.
 """
 
 import platform
+import socket
 import time
 from datetime import timedelta
 
@@ -45,6 +46,7 @@ async def get_status(request: Request) -> dict:
             "system": platform.system(),
             "release": platform.release(),
             "machine": platform.machine(),
+            "ip": _get_server_ip(),
         },
     }
 
@@ -91,3 +93,65 @@ async def test_samba_config(request: Request) -> dict:
 async def health_check() -> dict:
     """Simple health check endpoint."""
     return {"status": "ok", "version": __version__}
+
+
+@router.get("/config")
+async def get_config(request: Request) -> dict:
+    """Get the current global configuration."""
+    cfg = request.app.state.config.global_config
+    return {
+        "workgroup": cfg.workgroup,
+        "netbios_name": cfg.netbios_name,
+        "server_string": cfg.server_string,
+        "web_bind": cfg.web_bind,
+        "web_port": cfg.web_port,
+    }
+
+
+@router.put("/config")
+async def update_config(request: Request) -> dict:
+    """Update global configuration settings."""
+    import json as _json
+
+    cfg = request.app.state.config
+    smb = request.app.state.smb_manager
+
+    body = await request.json()
+    updates = {k: v for k, v in body.items() if v is not None and hasattr(cfg.global_config, k)}
+
+    if not updates:
+        return {"detail": "No valid fields to update"}
+
+    cfg.update_global(**updates)
+
+    # Re-apply Samba config with new settings
+    smb.write_config()
+    smb.reload_service()
+
+    return {
+        "detail": "Configuration updated",
+        "config": {
+            "workgroup": cfg.global_config.workgroup,
+            "netbios_name": cfg.global_config.netbios_name,
+            "server_string": cfg.global_config.server_string,
+            "web_bind": cfg.global_config.web_bind,
+            "web_port": cfg.global_config.web_port,
+        },
+    }
+
+
+def _get_server_ip() -> str:
+    """Detect the server's primary IP address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.1)
+        # Doesn't actually connect — just gets the route
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        try:
+            return socket.gethostbyname(socket.gethostname())
+        except Exception:
+            return ""

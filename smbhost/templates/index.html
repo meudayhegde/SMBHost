@@ -10,338 +10,517 @@
 </head>
 <body x-data="smbhostApp()" x-init="init()" class="bg-gray-950 text-gray-100 min-h-screen">
 
-    <!-- ── Header ─────────────────────────────────────────────────── -->
-    <header class="border-b border-gray-800 bg-gray-900">
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- HEADER                                                    -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <header class="app-header">
         <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-                    SH
-                </div>
+                <div class="app-logo">SH</div>
                 <div>
                     <h1 class="text-lg font-semibold">SMBHost</h1>
                     <p class="text-xs text-gray-500">Drive Share Manager</p>
                 </div>
             </div>
-            <div class="flex items-center gap-2 text-sm">
-                <span x-show="status.samba_running" class="flex items-center gap-1 text-green-400">
-                    <span class="w-2 h-2 bg-green-400 rounded-full inline-block"></span> Samba Active
-                </span>
-                <span x-show="!status.samba_running" class="flex items-center gap-1 text-red-400">
-                    <span class="w-2 h-2 bg-red-400 rounded-full inline-block"></span> Samba Down
-                </span>
-                <span class="text-gray-600 mx-2">|</span>
-                <span class="text-gray-500" x-text="status.uptime"></span>
+            <div class="flex items-center gap-3 text-sm">
+                <!-- Status indicator -->
+                <template x-if="!loading.initial">
+                    <span :class="status.samba_running ? 'badge badge-success' : 'badge badge-danger'">
+                        <span class="w-2 h-2 rounded-full" :class="status.samba_running ? 'bg-green-400' : 'bg-red-400'"></span>
+                        <span x-text="status.samba_running ? 'Samba Active' : 'Samba Down'"></span>
+                    </span>
+                </template>
+                <span class="text-gray-600 mx-1">|</span>
+                <span class="text-gray-500 text-xs" x-text="status.uptime"></span>
             </div>
         </div>
     </header>
 
-    <!-- ── Navigation ─────────────────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- NAVIGATION                                                -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
     <nav class="bg-gray-900 border-b border-gray-800 sticky top-0 z-10">
-        <div class="max-w-6xl mx-auto px-4 flex gap-1">
+        <div class="max-w-6xl mx-auto px-4 flex gap-0 overflow-x-auto">
             <template x-for="tab in tabs" :key="tab.id">
                 <button
                     @click="currentTab = tab.id"
-                    :class="currentTab === tab.id
-                        ? 'border-indigo-500 text-white bg-gray-800'
-                        : 'border-transparent text-gray-400 hover:text-gray-200 hover:border-gray-600'"
-                    class="px-4 py-3 border-b-2 text-sm font-medium transition-colors"
+                    :class="currentTab === tab.id ? 'active' : ''"
+                    class="nav-tab"
                     x-text="tab.label"
                 ></button>
             </template>
         </div>
     </nav>
 
-    <!-- ── Main Content ───────────────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- MAIN CONTENT                                              -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
     <main class="max-w-6xl mx-auto px-4 py-6">
 
-        <!-- ═══════════════════════════════════════════════════════ -->
-        <!-- DASHBOARD TAB                                           -->
-        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- ── DASHBOARD TAB ──────────────────────────────────────── -->
         <div x-show="currentTab === 'dashboard'" x-cloak>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                <!-- Drives Card -->
-                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm text-gray-400">Connected Drives</span>
-                        <span class="w-8 h-8 bg-blue-900/50 rounded-lg flex items-center justify-center text-blue-400">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-                        </span>
+
+            <!-- Loading State -->
+            <template x-if="loading.initial">
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="skeleton skeleton-card"></div>
+                        <div class="skeleton skeleton-card"></div>
                     </div>
-                    <p class="text-3xl font-bold" x-text="drives.length"></p>
-                </div>
-                <!-- Shares Card -->
-                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm text-gray-400">Active Shares</span>
-                        <span class="w-8 h-8 bg-green-900/50 rounded-lg flex items-center justify-center text-green-400">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
-                        </span>
+                    <div class="card">
+                        <div class="skeleton skeleton-heading"></div>
+                        <div class="skeleton skeleton-row w-full"></div>
+                        <div class="skeleton skeleton-row w-full"></div>
+                        <div class="skeleton skeleton-row w-full"></div>
                     </div>
-                    <p class="text-3xl font-bold" x-text="shares.length"></p>
                 </div>
-                <!-- Uptime Card -->
-                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm text-gray-400">Uptime</span>
-                        <span class="w-8 h-8 bg-purple-900/50 rounded-lg flex items-center justify-center text-purple-400">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                        </span>
-                    </div>
-                    <p class="text-3xl font-bold" x-text="status.uptime"></p>
-                </div>
-            </div>
+            </template>
 
-            <!-- Recent Activity -->
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <h2 class="text-lg font-semibold mb-4">Drive Overview</h2>
-                <div x-show="drives.length === 0" class="text-center py-8 text-gray-500">
-                    <svg class="w-12 h-12 mx-auto mb-3 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
-                    <p>No external drives detected</p>
-                    <p class="text-sm mt-1">Plug in a USB drive or external disk to get started</p>
-                </div>
-                <div x-show="drives.length > 0" class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="text-left text-gray-400 border-b border-gray-800">
-                                <th class="pb-3 font-medium">Drive</th>
-                                <th class="pb-3 font-medium">Size</th>
-                                <th class="pb-3 font-medium">Filesystem</th>
-                                <th class="pb-3 font-medium">Status</th>
-                                <th class="pb-3 font-medium">Share</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="drive in drives" :key="drive.uuid">
-                                <tr class="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                                    <td class="py-3">
-                                        <div class="font-medium" x-text="drive.label || drive.uuid.substring(0,8)"></div>
-                                        <div class="text-xs text-gray-500" x-text="drive.device_path"></div>
-                                    </td>
-                                    <td class="py-3 text-gray-400" x-text="drive.size_human"></td>
-                                    <td class="py-3">
-                                        <span class="px-2 py-0.5 bg-gray-800 rounded text-xs text-gray-300" x-text="drive.fstype"></span>
-                                    </td>
-                                    <td class="py-3">
-                                        <span x-show="drive.is_mounted" class="text-green-400 text-xs">mounted</span>
-                                        <span x-show="!drive.is_mounted" class="text-yellow-400 text-xs">not mounted</span>
-                                    </td>
-                                    <td class="py-3">
-                                        <span x-show="drive.share && drive.share.configured" class="text-green-400 text-xs">shared</span>
-                                        <span x-show="!drive.share || !drive.share.configured" class="text-gray-500 text-xs">not shared</span>
-                                    </td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+            <!-- Loaded State -->
+            <template x-if="!loading.initial">
+            <div class="animate-fade-in">
 
-        <!-- ═══════════════════════════════════════════════════════ -->
-        <!-- DRIVES TAB                                             -->
-        <!-- ═══════════════════════════════════════════════════════ -->
-        <div x-show="currentTab === 'drives'" x-cloak>
-            <div class="flex items-center justify-between mb-6">
-                <h2 class="text-xl font-semibold">Detected Drives</h2>
-                <button @click="refreshDrives()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">
-                    Refresh
-                </button>
-            </div>
-
-            <div x-show="drives.length === 0" class="text-center py-12 text-gray-500">
-                <svg class="w-16 h-16 mx-auto mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
-                <p class="text-lg">No external drives detected</p>
-                <p class="text-sm mt-2">Connect a USB drive or external hard disk</p>
-            </div>
-
-            <div class="space-y-3">
-                <template x-for="drive in drives" :key="drive.uuid">
-                    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                        <div class="flex items-start justify-between">
-                            <div class="flex-1">
-                                <div class="flex items-center gap-3 mb-2">
-                                    <span class="text-lg font-semibold" x-text="drive.label || 'Drive ' + drive.uuid.substring(0,8)"></span>
-                                    <span x-show="drive.is_mounted" class="px-2 py-0.5 bg-green-900/50 text-green-400 rounded text-xs">mounted</span>
-                                    <span x-show="!drive.is_mounted" class="px-2 py-0.5 bg-yellow-900/50 text-yellow-400 rounded text-xs">not mounted</span>
-                                </div>
-                                <div class="text-sm text-gray-400 space-y-1">
-                                    <div>Device: <span class="text-gray-300" x-text="drive.device_path"></span></div>
-                                    <div>Filesystem: <span class="text-gray-300" x-text="drive.fstype"></span> · Size: <span class="text-gray-300" x-text="drive.size_human"></span></div>
-                                    <div x-show="drive.mount_point">Mount: <span class="text-gray-300 font-mono text-xs" x-text="drive.mount_point"></span></div>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <!-- Already shared -->
-                                <template x-if="drive.share && drive.share.configured">
-                                    <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 bg-indigo-900/50 text-indigo-400 rounded text-xs" x-text="drive.share.share_name"></span>
-                                        <button @click="editShare(drive)" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">Edit</button>
-                                        <button @click="deleteShare(drive)" class="px-3 py-1.5 bg-red-900/30 hover:bg-red-900/50 text-red-400 rounded-lg text-sm transition-colors">Remove</button>
-                                    </div>
-                                </template>
-                                <!-- Not yet shared -->
-                                <template x-if="!drive.share || !drive.share.configured">
-                                    <button
-                                        @click="openCreateShare(drive)"
-                                        :disabled="!drive.is_mounted"
-                                        :class="drive.is_mounted ? 'bg-indigo-600 hover:bg-indigo-500 text-white' : 'bg-gray-800 text-gray-600 cursor-not-allowed'"
-                                        class="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-                                    >Create Share</button>
-                                </template>
-                            </div>
+                <!-- Stats Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div class="stat-card flex items-center gap-4">
+                        <div class="stat-icon bg-blue-900/50 text-blue-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Connected Drives</p>
+                            <p class="text-2xl font-bold" x-text="connectedDrivesCount + ' / ' + drives.length"></p>
                         </div>
                     </div>
-                </template>
+                    <div class="stat-card flex items-center gap-4">
+                        <div class="stat-icon bg-green-900/50 text-green-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Active Shares</p>
+                            <p class="text-2xl font-bold" x-text="activeSharesCount + ' / ' + shares.length"></p>
+                        </div>
+                    </div>
+                    <div class="stat-card flex items-center gap-4">
+                        <div class="stat-icon bg-purple-900/50 text-purple-400">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-400">Uptime</p>
+                            <p class="text-2xl font-bold" x-text="status.uptime"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- How to Connect -->
+                <div class="mb-8">
+                    <h2 class="text-lg font-semibold mb-4">How to Connect</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <!-- macOS -->
+                        <div class="feature-card">
+                            <div class="feature-icon bg-blue-900/40 text-blue-400">
+                                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+                            </div>
+                            <h3 class="font-medium text-sm mb-1">macOS</h3>
+                            <p class="text-xs text-gray-400 mb-3">Finder → Go → Connect to Server</p>
+                            <template x-if="shares.length > 0">
+                                <div class="space-y-1.5">
+                                    <template x-for="s in shares.filter(s => s.enabled).slice(0, 2)" :key="s.drive_uuid">
+                                        <div class="conn-box text-xs" @click="copyToClipboard(getSmbUrl(s.share_name))">
+                                            <svg class="w-4 h-4 flex-shrink-0 text-indigo-400"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" fill="none" stroke="currentColor"/></svg>
+                                            <span class="truncate" x-text="getSmbUrl(s.share_name)"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="shares.filter(s => s.enabled).length === 0">
+                                <p class="text-xs text-gray-600">No shares configured yet</p>
+                            </template>
+                        </div>
+
+                        <!-- Windows -->
+                        <div class="feature-card">
+                            <div class="feature-icon bg-indigo-900/40 text-indigo-400">
+                                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 12V6.5l8-1.1v6.6H3zm0 .9h8v6.6l-8-1.1v-5.5zm9 .9h9v5.5l-9-1.2v-4.3zm0-9.7l9-1.2v5.5H9V4.1z"/></svg>
+                            </div>
+                            <h3 class="font-medium text-sm mb-1">Windows</h3>
+                            <p class="text-xs text-gray-400 mb-3">File Explorer → \\server\share</p>
+                            <template x-if="shares.length > 0">
+                                <div class="space-y-1.5">
+                                    <template x-for="s in shares.filter(s => s.enabled).slice(0, 2)" :key="s.drive_uuid">
+                                        <div class="conn-box text-xs" @click="copyToClipboard('\\\\' + (status.hostname || 'smbhost') + '\\' + s.share_name)">
+                                            <svg class="w-4 h-4 flex-shrink-0 text-indigo-400"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" fill="none" stroke="currentColor"/></svg>
+                                            <span class="truncate" x-text="'\\\\' + (status.hostname || 'smbhost') + '\\' + s.share_name"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="shares.filter(s => s.enabled).length === 0">
+                                <p class="text-xs text-gray-600">No shares configured yet</p>
+                            </template>
+                        </div>
+
+                        <!-- Android / iOS -->
+                        <div class="feature-card">
+                            <div class="feature-icon bg-green-900/40 text-green-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" stroke-width="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2" stroke-linecap="round"/></svg>
+                            </div>
+                            <h3 class="font-medium text-sm mb-1">Android / iOS</h3>
+                            <p class="text-xs text-gray-400 mb-3">Files app or third-party file manager</p>
+                            <template x-if="shares.length > 0">
+                                <div class="space-y-1.5">
+                                    <template x-for="s in shares.filter(s => s.enabled).slice(0, 1)" :key="s.drive_uuid">
+                                        <div class="conn-box text-xs" @click="copyToClipboard(getSmbUrlIp(s.share_name))">
+                                            <svg class="w-4 h-4 flex-shrink-0 text-indigo-400"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" fill="none" stroke="currentColor"/></svg>
+                                            <span class="truncate" x-text="getSmbUrlIp(s.share_name)"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="shares.filter(s => s.enabled).length === 0">
+                                <p class="text-xs text-gray-600">No shares configured yet</p>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drive Overview Table -->
+                <div class="card">
+                    <h2 class="text-lg font-semibold mb-4">Drive Overview</h2>
+
+                    <div x-show="drives.length === 0" class="empty-state">
+                        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                        <p class="empty-state-title">No external drives detected</p>
+                        <p class="empty-state-desc">Plug in a USB drive or external disk to get started. Detected drives will appear here automatically.</p>
+                    </div>
+
+                    <div x-show="drives.length > 0" class="table-container">
+                        <table class="data-table w-full">
+                            <thead>
+                                <tr>
+                                    <th>Drive</th>
+                                    <th>Size</th>
+                                    <th>Filesystem</th>
+                                    <th>Status</th>
+                                    <th>Share</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="drive in drives" :key="drive.uuid">
+                                    <tr>
+                                        <td data-label="Drive">
+                                            <div class="font-medium" x-text="drive.label || drive.uuid.substring(0,8)"></div>
+                                            <div class="text-xs text-gray-500 font-mono" x-text="drive.device_path"></div>
+                                        </td>
+                                        <td data-label="Size" class="text-gray-400" x-text="drive.size_human"></td>
+                                        <td data-label="Filesystem">
+                                            <span class="badge badge-neutral" x-text="drive.fstype"></span>
+                                        </td>
+                                        <td data-label="Status">
+                                            <span x-show="drive.is_mounted" class="badge badge-success">mounted</span>
+                                            <span x-show="!drive.is_mounted" class="badge badge-warning">not mounted</span>
+                                        </td>
+                                        <td data-label="Share">
+                                            <span x-show="drive.share && drive.share.configured" class="badge badge-purple" x-text="drive.share.share_name"></span>
+                                            <span x-show="!drive.share || !drive.share.configured" class="text-gray-600 text-xs">—</span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
+            </template>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════════ -->
-        <!-- SETTINGS TAB                                           -->
-        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- ── DRIVES TAB ──────────────────────────────────────────── -->
+        <div x-show="currentTab === 'drives'" x-cloak>
+            <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+                <h2 class="text-xl font-semibold">Detected Drives</h2>
+                <div class="flex items-center gap-3">
+                    <!-- Search -->
+                    <div class="search-wrapper">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <input type="text" x-model="driveSearch" placeholder="Filter drives..." class="form-input text-sm" style="padding-left:2.5rem;width:220px;">
+                    </div>
+                    <button @click="refreshDrives()" class="btn btn-secondary btn-sm">
+                        <svg class="w-4 h-4" :class="loading.drives && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading -->
+            <template x-if="loading.drives && drives.length === 0">
+                <div class="space-y-3">
+                    <div class="card"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-row w-3/4"></div><div class="skeleton skeleton-row w-1/2"></div></div>
+                    <div class="card"><div class="skeleton skeleton-heading"></div><div class="skeleton skeleton-row w-3/4"></div><div class="skeleton skeleton-row w-1/2"></div></div>
+                </div>
+            </template>
+
+            <!-- Empty -->
+            <template x-if="!loading.drives && drives.length === 0">
+                <div class="card">
+                    <div class="empty-state">
+                        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        <p class="empty-state-title">No external drives detected</p>
+                        <p class="empty-state-desc">Connect a USB drive or external hard disk to see it here.</p>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Filter empty -->
+            <template x-if="!loading.drives && drives.length > 0 && filteredDrives.length === 0">
+                <div class="card">
+                    <div class="empty-state">
+                        <svg class="empty-state-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                        <p class="empty-state-title">No matching drives</p>
+                        <p class="empty-state-desc">Try a different search term.</p>
+                    </div>
+                </div>
+            </template>
+
+            <!-- Drive list -->
+            <template x-if="filteredDrives.length > 0">
+                <div class="space-y-3 animate-fade-in">
+                    <template x-for="drive in filteredDrives" :key="drive.uuid">
+                        <div class="drive-card">
+                            <div class="drive-card-header">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                        <span class="drive-card-name" x-text="drive.label || 'Drive ' + drive.uuid.substring(0,8)"></span>
+                                        <span x-show="drive.is_mounted" class="badge badge-success">mounted</span>
+                                        <span x-show="!drive.is_mounted" class="badge badge-warning">not mounted</span>
+                                    </div>
+                                    <div class="text-sm text-gray-400 space-y-0.5">
+                                        <div>Device: <span class="text-gray-300 font-mono text-xs" x-text="drive.device_path"></span></div>
+                                        <div>
+                                            <span class="badge badge-neutral mr-2" x-text="drive.fstype"></span>
+                                            <span class="text-gray-300" x-text="drive.size_human"></span>
+                                        </div>
+                                        <div x-show="drive.mount_point">
+                                            Mount: <span class="text-gray-300 font-mono text-xs" x-text="drive.mount_point"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    <!-- Shared -->
+                                    <template x-if="drive.share && drive.share.configured">
+                                        <div class="flex items-center gap-2">
+                                            <span class="badge badge-purple" x-text="drive.share.share_name"></span>
+                                            <button @click="editShare(drive)" class="btn btn-secondary btn-sm">Edit</button>
+                                            <button @click="confirmDeleteShare(drive)" class="btn btn-danger btn-sm">Remove</button>
+                                        </div>
+                                    </template>
+                                    <!-- Not shared -->
+                                    <template x-if="!drive.share || !drive.share.configured">
+                                        <button
+                                            @click="openCreateShare(drive)"
+                                            :disabled="!drive.is_mounted"
+                                            class="btn btn-primary btn-sm"
+                                        >Create Share</button>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Connection info for shared drives -->
+                            <template x-if="drive.share && drive.share.configured && drive.share.enabled">
+                                <div class="mt-3 pt-3 border-t border-gray-800 flex items-center gap-2 text-xs">
+                                    <span class="text-gray-500">Connect:</span>
+                                    <span class="conn-box py-1 px-2 text-xs flex-1 min-w-0" @click="copyToClipboard(getSmbUrl(drive.share.share_name))">
+                                        <span class="truncate" x-text="getSmbUrl(drive.share.share_name)"></span>
+                                        <svg class="w-3.5 h-3.5 flex-shrink-0 text-gray-500 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                    </span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </template>
+        </div>
+
+        <!-- ── SETTINGS TAB ────────────────────────────────────────── -->
         <div x-show="currentTab === 'settings'" x-cloak>
             <h2 class="text-xl font-semibold mb-6">Settings</h2>
 
-            <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 max-w-2xl">
+            <template x-if="settingsLoading">
+                <div class="card max-w-2xl">
+                    <div class="skeleton skeleton-heading"></div>
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-full"></div>
+                    <div class="skeleton skeleton-row w-3/4"></div>
+                </div>
+            </template>
+
+            <template x-if="!settingsLoading">
+            <div class="card max-w-2xl">
                 <form @submit.prevent="saveSettings()" class="space-y-5">
-                    <h3 class="text-lg font-medium mb-4">Samba Global Settings</h3>
+                    <h3 class="text-base font-semibold mb-4">Samba Global Settings</h3>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-1">Workgroup</label>
-                        <input type="text" x-model="settings.workgroup" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors" maxlength="15">
-                        <p class="text-xs text-gray-500 mt-1">Windows networking workgroup name</p>
+                    <div class="form-group">
+                        <label class="form-label">Workgroup</label>
+                        <input type="text" x-model="settings.workgroup" class="form-input" maxlength="15">
+                        <p class="form-hint">Windows networking workgroup name</p>
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-1">NetBIOS Name</label>
-                        <input type="text" x-model="settings.netbios_name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors" maxlength="15">
-                        <p class="text-xs text-gray-500 mt-1">Server name visible in network browser (max 15 chars)</p>
+                    <div class="form-group">
+                        <label class="form-label">NetBIOS Name</label>
+                        <input type="text" x-model="settings.netbios_name" class="form-input" maxlength="15">
+                        <p class="form-hint">Server name visible in network browser (max 15 chars, uppercase)</p>
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-gray-300 mb-1">Server Description</label>
-                        <input type="text" x-model="settings.server_string" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors">
+                    <div class="form-group">
+                        <label class="form-label">Server Description</label>
+                        <input type="text" x-model="settings.server_string" class="form-input">
                     </div>
 
-                    <hr class="border-gray-800">
+                    <hr class="divider">
 
-                    <h3 class="text-lg font-medium mb-4">Web UI Settings</h3>
+                    <h3 class="text-base font-semibold mb-4">Web UI Settings</h3>
 
                     <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-1">Bind Address</label>
-                            <input type="text" x-model="settings.web_bind" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors">
-                            <p class="text-xs text-gray-500 mt-1">Use 0.0.0.0 to allow remote access</p>
+                        <div class="form-group">
+                            <label class="form-label">Bind Address</label>
+                            <input type="text" x-model="settings.web_bind" class="form-input">
+                            <p class="form-hint">Use 0.0.0.0 for remote access</p>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-1">Port</label>
-                            <input type="number" x-model="settings.web_port" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors" min="1" max="65535">
+                        <div class="form-group">
+                            <label class="form-label">Port</label>
+                            <input type="number" x-model="settings.web_port" class="form-input" min="1" max="65535">
                         </div>
                     </div>
 
                     <div class="flex items-center gap-3 pt-2">
-                        <button type="submit" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors">
+                        <button type="submit" class="btn btn-primary" :disabled="settingsLoading">
+                            <svg x-show="settingsLoading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                             Save Settings
                         </button>
-                        <span x-show="settingsSaved" class="text-green-400 text-sm">✓ Saved</span>
+                        <span x-show="settingsSaved" class="text-green-400 text-sm flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            Saved
+                        </span>
                         <span x-show="settingsError" class="text-red-400 text-sm" x-text="settingsError"></span>
                     </div>
                 </form>
             </div>
+            </template>
         </div>
 
-        <!-- ═══════════════════════════════════════════════════════ -->
-        <!-- SYSTEM TAB                                             -->
-        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- ── SYSTEM TAB ──────────────────────────────────────────── -->
         <div x-show="currentTab === 'system'" x-cloak>
             <h2 class="text-xl font-semibold mb-6">System</h2>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <!-- Status -->
-                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <h3 class="text-lg font-medium mb-4">Service Status</h3>
+                <div class="card">
+                    <h3 class="text-base font-semibold mb-4">Service Status</h3>
+                    <template x-if="loading.status">
+                        <div class="space-y-3">
+                            <div class="skeleton skeleton-row w-full"></div>
+                            <div class="skeleton skeleton-row w-full"></div>
+                            <div class="skeleton skeleton-row w-full"></div>
+                        </div>
+                    </template>
+                    <template x-if="!loading.status">
                     <div class="space-y-3 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-gray-400">SMBHost Version</span>
-                            <span class="text-gray-200" x-text="status.version"></span>
+                        <div class="flex justify-between items-center py-1">
+                            <span class="text-gray-400">SMBHost</span>
+                            <span class="badge badge-info" x-text="'v' + status.version"></span>
                         </div>
-                        <div class="flex justify-between">
+                        <div class="flex justify-between items-center py-1">
                             <span class="text-gray-400">Samba (smbd)</span>
-                            <span :class="status.samba_running ? 'text-green-400' : 'text-red-400'" x-text="status.samba_running ? 'Running' : 'Stopped'"></span>
+                            <span :class="status.samba_running ? 'badge badge-success' : 'badge badge-danger'" x-text="status.samba_running ? 'Running' : 'Stopped'"></span>
                         </div>
-                        <div class="flex justify-between">
+                        <div class="flex justify-between items-center py-1">
                             <span class="text-gray-400">NetBIOS (nmbd)</span>
-                            <span x-text="status.nmbd_status || 'unknown'" :class="status.nmbd_status === 'active' ? 'text-green-400' : 'text-gray-400'"></span>
+                            <span :class="status.nmbd_status === 'active' ? 'badge badge-success' : 'badge badge-neutral'" x-text="status.nmbd_status || 'unknown'"></span>
                         </div>
-                        <div class="flex justify-between">
+                        <div class="flex justify-between items-center py-1">
                             <span class="text-gray-400">Python</span>
-                            <span class="text-gray-200" x-text="status.python_version"></span>
+                            <span class="text-gray-300 font-mono text-xs" x-text="status.python_version"></span>
                         </div>
-                        <div class="flex justify-between">
+                        <div class="flex justify-between items-center py-1">
                             <span class="text-gray-400">Hostname</span>
-                            <span class="text-gray-200" x-text="status.hostname"></span>
+                            <span class="text-gray-300 font-mono text-xs" x-text="status.hostname"></span>
+                        </div>
+                        <div x-show="status.server_ip" class="flex justify-between items-center py-1">
+                            <span class="text-gray-400">Server IP</span>
+                            <span class="text-gray-300 font-mono text-xs" x-text="status.server_ip"></span>
                         </div>
                     </div>
+                    </template>
                 </div>
 
                 <!-- Actions -->
-                <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
-                    <h3 class="text-lg font-medium mb-4">Actions</h3>
-                    <div class="space-y-3">
-                        <button @click="reloadSamba()" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors text-left">
+                <div class="card">
+                    <h3 class="text-base font-semibold mb-4">Actions</h3>
+                    <div class="space-y-2">
+                        <button @click="confirmReloadSamba()" class="btn btn-secondary w-full justify-start">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                             Reload Samba Configuration
                         </button>
-                        <button @click="restartSamba()" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors text-left">
+                        <button @click="confirmRestartSamba()" class="btn btn-secondary w-full justify-start">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             Restart Samba Services
                         </button>
-                        <button @click="testSambaConfig()" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors text-left">
-                            Validate smb.conf
+                        <button @click="testSambaConfig()" :disabled="sambaTestLoading" class="btn btn-secondary w-full justify-start">
+                            <svg class="w-4 h-4" :class="sambaTestLoading && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span x-text="sambaTestLoading ? 'Testing...' : 'Validate smb.conf'"></span>
                         </button>
                     </div>
+
                     <!-- Test output -->
-                    <div x-show="sambaTestOutput !== null" class="mt-4">
+                    <div x-show="sambaTestOutput !== null" class="mt-4 animate-fade-in">
                         <div :class="sambaTestValid ? 'border-green-800 bg-green-900/20' : 'border-red-800 bg-red-900/20'" class="border rounded-lg p-3">
                             <div class="flex items-center gap-2 mb-2">
-                                <span x-show="sambaTestValid" class="text-green-400 text-xs font-medium">✓ Valid</span>
-                                <span x-show="!sambaTestValid" class="text-red-400 text-xs font-medium">✗ Invalid</span>
+                                <span x-show="sambaTestValid" class="badge badge-success">✓ Valid</span>
+                                <span x-show="!sambaTestValid" class="badge badge-danger">✗ Invalid</span>
                             </div>
-                            <pre class="text-xs text-gray-400 whitespace-pre-wrap max-h-40 overflow-y-auto" x-text="sambaTestOutput"></pre>
+                            <pre class="text-xs text-gray-400 whitespace-pre-wrap max-h-40 overflow-y-auto font-mono" x-text="sambaTestOutput"></pre>
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Logs -->
-            <div class="mt-6 bg-gray-900 border border-gray-800 rounded-xl p-5">
+            <div class="mt-6 card">
                 <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-medium">Recent Logs</h3>
-                    <button @click="refreshLogs()" class="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">Refresh</button>
+                    <h3 class="text-base font-semibold">Recent Logs</h3>
+                    <button @click="refreshLogs()" :disabled="loading.logs" class="btn btn-secondary btn-sm">
+                        <svg class="w-4 h-4" :class="loading.logs && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        Refresh
+                    </button>
                 </div>
-                <pre class="text-xs text-gray-400 font-mono bg-gray-950 rounded-lg p-4 max-h-64 overflow-y-auto" x-text="logs || 'Loading...'"></pre>
+                <pre class="text-xs text-gray-400 font-mono bg-gray-950 rounded-lg p-4 max-h-96 overflow-y-auto whitespace-pre-wrap" x-text="logs || 'Loading...'"></pre>
             </div>
         </div>
+
     </main>
 
-    <!-- ── Share Config Modal ────────────────────────────────────── -->
-    <div x-show="showModal" class="fixed inset-0 z-50 flex items-center justify-center" x-cloak x-transition>
-        <div class="absolute inset-0 bg-black/60" @click="showModal = false"></div>
-        <div class="relative bg-gray-900 border border-gray-700 rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl">
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- SHARE CONFIG MODAL                                         -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div x-show="showModal" class="modal-overlay" x-cloak x-transition>
+        <div class="modal-bg" @click="showModal = false"></div>
+        <div class="modal-content animate-fade-in-up">
             <div class="flex items-center justify-between mb-5">
                 <h3 class="text-lg font-semibold" x-text="modalTitle"></h3>
-                <button @click="showModal = false" class="text-gray-500 hover:text-gray-300 transition-colors">
+                <button @click="showModal = false" class="btn btn-ghost btn-sm p-1">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
 
             <form @submit.prevent="submitShare()" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">Share Name</label>
-                    <input type="text" x-model="shareForm.share_name" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors" maxlength="15">
-                    <p class="text-xs text-gray-500 mt-1">Name visible in network browser (max 15 chars)</p>
+                <div class="form-group">
+                    <label class="form-label">Share Name</label>
+                    <input type="text" x-model="shareForm.share_name" required class="form-input" maxlength="15" placeholder="e.g. my_drive">
+                    <p class="form-hint">Name visible in network browser (max 15 chars)</p>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">Access Mode</label>
-                    <select x-model="shareForm.auth_mode" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors">
+                <div class="form-group">
+                    <label class="form-label">Access Mode</label>
+                    <select x-model="shareForm.auth_mode" class="form-select">
                         <option value="guest">Guest — Open access, no password</option>
                         <option value="guest_ro">Guest Read-Only — Open but no writes</option>
                         <option value="user_pass">User + Password — Login required</option>
@@ -349,41 +528,80 @@
                 </div>
 
                 <template x-if="shareForm.auth_mode === 'user_pass'">
-                    <div class="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-1">Username</label>
-                            <input type="text" x-model="shareForm.username" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors">
+                    <div class="space-y-3 p-3 bg-gray-800/50 rounded-lg border border-gray-700 animate-fade-in">
+                        <div class="form-group">
+                            <label class="form-label">Username</label>
+                            <input type="text" x-model="shareForm.username" class="form-input" placeholder="SMB username">
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-1">Password</label>
-                            <input type="password" x-model="shareForm.password" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 transition-colors">
+                        <div class="form-group">
+                            <label class="form-label">Password</label>
+                            <input type="password" x-model="shareForm.password" class="form-input" placeholder="SMB password">
                         </div>
                     </div>
                 </template>
 
                 <div class="flex items-center gap-3">
-                    <input type="checkbox" id="readonly" x-model="shareForm.read_only" class="w-4 h-4 rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500">
-                    <label for="readonly" class="text-sm text-gray-300">Read-only access</label>
+                    <input type="checkbox" id="readonly" x-model="shareForm.read_only" class="form-checkbox">
+                    <label for="readonly" class="text-sm text-gray-300 cursor-pointer">Read-only access</label>
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <input type="checkbox" id="browseable" x-model="shareForm.browseable" class="w-4 h-4 rounded bg-gray-800 border-gray-700 text-indigo-600 focus:ring-indigo-500">
-                    <label for="browseable" class="text-sm text-gray-300">Visible in network browse list</label>
+                    <input type="checkbox" id="browseable" x-model="shareForm.browseable" class="form-checkbox">
+                    <label for="browseable" class="text-sm text-gray-300 cursor-pointer">Visible in network browse list</label>
                 </div>
 
                 <div class="flex gap-3 pt-2">
-                    <button type="submit" class="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors">
+                    <button type="submit" class="btn btn-primary flex-1" :disabled="modalLoading">
+                        <svg x-show="modalLoading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
                         <span x-text="modalSubmitLabel"></span>
                     </button>
-                    <button type="button" @click="showModal = false" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">Cancel</button>
+                    <button type="button" @click="showModal = false" class="btn btn-secondary">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- ── Toast Notifications ──────────────────────────────────── -->
-    <div x-show="toast.show" x-transition class="fixed bottom-4 right-4 z-50" x-cloak>
-        <div :class="toast.type === 'error' ? 'bg-red-900/90 border-red-700' : 'bg-green-900/90 border-green-700'" class="border rounded-xl px-4 py-3 text-sm shadow-lg max-w-sm" x-text="toast.message"></div>
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- CONFIRMATION DIALOG                                        -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div x-show="confirmDialog.show" class="modal-overlay" x-cloak x-transition>
+        <div class="modal-bg" @click="cancelConfirm()"></div>
+        <div class="modal-content animate-fade-in-up" style="max-width:24rem;">
+            <div class="flex items-start gap-3 mb-4">
+                <div class="w-10 h-10 rounded-full bg-red-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <div>
+                    <h3 class="font-semibold" x-text="confirmDialog.title"></h3>
+                    <p class="text-sm text-gray-400 mt-1" x-text="confirmDialog.message"></p>
+                </div>
+            </div>
+            <div class="flex gap-3 justify-end">
+                <button @click="cancelConfirm()" class="btn btn-secondary btn-sm" :disabled="confirmDialog.loading">Cancel</button>
+                <button @click="executeConfirm()" class="btn btn-danger btn-sm" :disabled="confirmDialog.loading">
+                    <svg x-show="confirmDialog.loading" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                    Confirm
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- TOAST NOTIFICATIONS                                        -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <div class="toast-container" x-show="toasts.length > 0" x-cloak>
+        <template x-for="t in toasts" :key="t.id">
+            <div
+                :class="'toast toast-' + t.type + (t.leaving ? ' toast-leaving' : '')"
+                @click="dismissToast(t.id)"
+                class="cursor-pointer"
+            >
+                <svg x-show="t.type === 'success'" class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                <svg x-show="t.type === 'error'" class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                <svg x-show="t.type === 'info'" class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span x-text="t.message"></span>
+            </div>
+        </template>
     </div>
 
 </body>

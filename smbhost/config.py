@@ -219,6 +219,8 @@ class ConfigManager:
         lines.append("   usershare allow guests = yes")
         lines.append("   security = user")
         lines.append("   server role = standalone server")
+        lines.append("   server min protocol = SMB2")
+        lines.append("   ntlm auth = yes")
         lines.append("   obey pam restrictions = yes")
         lines.append("   unix password sync = yes")
         lines.append("   passwd program = /usr/bin/passwd %u")
@@ -240,11 +242,15 @@ class ConfigManager:
 
             if share.auth_mode == AuthMode.GUEST:
                 lines.append("   guest ok = yes")
+                lines.append("   guest only = yes")
                 lines.append("   force user = nobody")
+                lines.append("   force group = nogroup")
             elif share.auth_mode == AuthMode.GUEST_RO:
                 lines.append("   guest ok = yes")
+                lines.append("   guest only = yes")
                 lines.append("   read only = yes")
                 lines.append("   force user = nobody")
+                lines.append("   force group = nogroup")
             elif share.auth_mode == AuthMode.USER_PASS:
                 lines.append("   guest ok = no")
                 lines.append(f"   valid users = {share.username}")

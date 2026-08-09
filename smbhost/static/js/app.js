@@ -1,13 +1,19 @@
 /**
- * SMBHost Web UI — Application logic
+ * SMBHost Web UI — Application logic v2
  *
- * Uses Alpine.js for reactive UI. This file provides the
- * smbhostApp() Alpine component with all data and methods.
+ * Alpine.js reactive UI with:
+ * - Loading states & skeleton screens
+ * - Confirmation dialogs (replaces browser confirm())
+ * - Copy-to-clipboard for SMB connection strings
+ * - Drive search/filter
+ * - Improved toast notifications with icons
+ * - Proper settings persistence
+ * - WebSocket reconnection with backoff
  */
 
 function smbhostApp() {
     return {
-        // ── State ──────────────────────────────────────────────────
+        // ── Tab State ──────────────────────────────────────────────
         currentTab: 'dashboard',
         tabs: [
             { id: 'dashboard', label: 'Dashboard' },
@@ -16,8 +22,10 @@ function smbhostApp() {
             { id: 'system', label: 'System' },
         ],
 
+        // ── Data ───────────────────────────────────────────────────
         drives: [],
         shares: [],
+        driveSearch: '',
 
         status: {
             version: '',
@@ -26,6 +34,7 @@ function smbhostApp() {
             nmbd_status: '',
             python_version: '',
             hostname: '',
+            server_ip: '',
         },
 
         settings: {
@@ -35,14 +44,25 @@ function smbhostApp() {
             web_bind: '127.0.0.1',
             web_port: 8080,
         },
+        settingsLoading: false,
         settingsSaved: false,
         settingsError: '',
 
-        // Modal state
+        // ── Loading States ─────────────────────────────────────────
+        loading: {
+            drives: false,
+            shares: false,
+            status: false,
+            logs: false,
+            initial: true,
+        },
+
+        // ── Share Modal ────────────────────────────────────────────
         showModal: false,
         modalTitle: 'Create Share',
         modalSubmitLabel: 'Create Share',
-        modalMode: 'create', // 'create' | 'edit'
+        modalMode: 'create',
+        modalLoading: false,
         editingDriveUuid: null,
 
         shareForm: {
@@ -57,23 +77,53 @@ function smbhostApp() {
             browseable: true,
         },
 
-        // Logs
-        logs: '',
-
-        // Samba test
-        sambaTestOutput: null,
-        sambaTestValid: false,
-
-        // Toast
-        toast: {
+        // ── Confirm Dialog ─────────────────────────────────────────
+        confirmDialog: {
             show: false,
+            title: '',
             message: '',
-            type: 'success',
+            action: null,
+            loading: false,
         },
 
-        // WebSocket
+        // ── Logs ───────────────────────────────────────────────────
+        logs: '',
+
+        // ── Samba Test ─────────────────────────────────────────────
+        sambaTestOutput: null,
+        sambaTestValid: false,
+        sambaTestLoading: false,
+
+        // ── Toasts ─────────────────────────────────────────────────
+        toasts: [],
+
+        // ── WebSocket ──────────────────────────────────────────────
         _ws: null,
         _wsReconnectTimer: null,
+        _wsReconnectDelay: 2000,
+
+        // ── Computed ───────────────────────────────────────────────
+        get filteredDrives() {
+            if (!this.driveSearch.trim()) return this.drives;
+            const q = this.driveSearch.toLowerCase();
+            return this.drives.filter(d =>
+                (d.label || '').toLowerCase().includes(q) ||
+                d.uuid.toLowerCase().includes(q) ||
+                (d.device_path || '').toLowerCase().includes(q) ||
+                (d.fstype || '').toLowerCase().includes(q)
+            );
+        },
+
+        get connectedDrivesCount() {
+            return this.drives.filter(d => d.is_mounted).length;
+        },
+
+        get activeSharesCount() {
+            return this.shares.filter(s => s.enabled).length;
+        },
+
+        get hasAnyDrives() { return this.drives.length > 0; },
+        get hasAnyShares() { return this.shares.length > 0; },
 
         // ── Init ───────────────────────────────────────────────────
         async init() {
@@ -83,9 +133,10 @@ function smbhostApp() {
                 this.refreshStatus(),
                 this.loadSettings(),
             ]);
+            this.loading.initial = false;
             this.connectWebSocket();
 
-            // Poll for updates every 30s
+            // Poll every 30s
             setInterval(() => {
                 this.refreshDrives();
                 this.refreshShares();
@@ -96,7 +147,10 @@ function smbhostApp() {
         // ── API Helpers ────────────────────────────────────────────
         async apiGet(url) {
             const resp = await fetch(url);
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${resp.status}`);
+            }
             return resp.json();
         },
 
@@ -136,9 +190,79 @@ function smbhostApp() {
         },
 
         // ── Toast ──────────────────────────────────────────────────
-        showToast(message, type = 'success') {
-            this.toast = { show: true, message, type };
-            setTimeout(() => { this.toast.show = false; }, 4000);
+        addToast(message, type = 'success') {
+            const id = Date.now() + Math.random();
+            this.toasts.push({ id, message, type, leaving: false });
+
+            // Auto-dismiss after 5s
+            setTimeout(() => this.dismissToast(id), 5000);
+        },
+
+        dismissToast(id) {
+            const idx = this.toasts.findIndex(t => t.id === id);
+            if (idx === -1) return;
+            // Trigger leave animation
+            this.toasts[idx].leaving = true;
+            setTimeout(() => {
+                this.toasts = this.toasts.filter(t => t.id !== id);
+            }, 250);
+        },
+
+        // ── Confirm Dialog ─────────────────────────────────────────
+        showConfirm(title, message, action) {
+            this.confirmDialog = {
+                show: true,
+                title,
+                message,
+                action,
+                loading: false,
+            };
+        },
+
+        async executeConfirm() {
+            this.confirmDialog.loading = true;
+            try {
+                await this.confirmDialog.action();
+            } catch (e) {
+                this.addToast('Error: ' + e.message, 'error');
+            } finally {
+                this.confirmDialog.show = false;
+                this.confirmDialog.loading = false;
+            }
+        },
+
+        cancelConfirm() {
+            this.confirmDialog.show = false;
+        },
+
+        // ── Copy Helper ────────────────────────────────────────────
+        async copyToClipboard(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+                this.addToast('Copied to clipboard');
+            } catch (e) {
+                // Fallback
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                this.addToast('Copied to clipboard');
+            }
+        },
+
+        // ── SMB Connection Strings ─────────────────────────────────
+        getSmbUrl(shareName) {
+            const host = this.status.hostname || this.settings.netbios_name.toLowerCase() || 'smbhost';
+            return `smb://${host}/${shareName}`;
+        },
+
+        getSmbUrlIp(shareName) {
+            const ip = this.status.server_ip || window.location.hostname;
+            return `smb://${ip}/${shareName}`;
         },
 
         // ── WebSocket ──────────────────────────────────────────────
@@ -154,75 +278,100 @@ function smbhostApp() {
                         if (msg.event === 'drive_added' || msg.event === 'drive_removed') {
                             this.refreshDrives();
                             this.refreshShares();
+                            const action = msg.event === 'drive_added' ? 'connected' : 'disconnected';
+                            this.addToast(`Drive ${action}: ${msg.data?.label || 'Unknown'}`, 'info');
                         }
                     } catch (e) {
                         // Ignore parse errors
                     }
                 };
+                this._ws.onopen = () => {
+                    this._wsReconnectDelay = 2000; // Reset backoff on success
+                };
                 this._ws.onclose = () => {
-                    // Reconnect after 5 seconds
-                    this._wsReconnectTimer = setTimeout(() => this.connectWebSocket(), 5000);
+                    this._wsReconnectTimer = setTimeout(() => {
+                        this.connectWebSocket();
+                        this._wsReconnectDelay = Math.min(this._wsReconnectDelay * 1.5, 30000);
+                    }, this._wsReconnectDelay);
                 };
                 this._ws.onerror = () => {
                     this._ws?.close();
                 };
             } catch (e) {
-                // WebSocket not supported or connection failed
+                // WebSocket not supported
             }
         },
 
         // ── Data Refresh ───────────────────────────────────────────
         async refreshDrives() {
+            this.loading.drives = true;
             try {
                 const data = await this.apiGet('/api/drives');
                 this.drives = data.drives || [];
             } catch (e) {
                 console.error('Failed to fetch drives:', e);
+            } finally {
+                this.loading.drives = false;
             }
         },
 
         async refreshShares() {
+            this.loading.shares = true;
             try {
                 const data = await this.apiGet('/api/shares');
                 this.shares = data.shares || [];
             } catch (e) {
                 console.error('Failed to fetch shares:', e);
+            } finally {
+                this.loading.shares = false;
             }
         },
 
         async refreshStatus() {
+            this.loading.status = true;
             try {
                 const data = await this.apiGet('/api/system/status');
                 this.status = {
                     version: data.app?.version || '',
                     uptime: data.app?.uptime || '',
                     samba_running: data.samba?.running || false,
-                    nmbd_status: data.samba?.nmbd || '',
+                    nmbd_status: data.samba?.nmbd || 'unknown',
                     python_version: data.app?.python || '',
                     hostname: data.host?.hostname || '',
+                    server_ip: data.host?.ip || '',
                 };
             } catch (e) {
                 console.error('Failed to fetch status:', e);
+            } finally {
+                this.loading.status = false;
             }
         },
 
         async refreshLogs() {
+            this.loading.logs = true;
             try {
                 const data = await this.apiGet('/api/system/logs?lines=50');
                 this.logs = data.logs || '';
             } catch (e) {
                 this.logs = 'Failed to load logs.';
+            } finally {
+                this.loading.logs = false;
             }
         },
 
         async loadSettings() {
-            // Settings are loaded from the drives API which includes global config
-            // For now, use defaults that will be overwritten by the server
+            this.settingsLoading = true;
             try {
-                const data = await this.apiGet('/api/system/status');
-                // Settings would come from a dedicated endpoint in a production app
+                const data = await this.apiGet('/api/system/config');
+                this.settings.workgroup = data.workgroup || 'WORKGROUP';
+                this.settings.netbios_name = data.netbios_name || 'SMBHOST';
+                this.settings.server_string = data.server_string || 'SMBHost File Server';
+                this.settings.web_bind = data.web_bind || '127.0.0.1';
+                this.settings.web_port = data.web_port || 8080;
             } catch (e) {
                 // Use defaults
+            } finally {
+                this.settingsLoading = false;
             }
         },
 
@@ -269,12 +418,12 @@ function smbhostApp() {
         },
 
         async submitShare() {
+            this.modalLoading = true;
             try {
                 if (this.modalMode === 'create') {
                     await this.apiPost('/api/shares', this.shareForm);
-                    this.showToast('Share created successfully');
+                    this.addToast('Share created successfully');
                 } else if (this.modalMode === 'edit' && this.editingDriveUuid) {
-                    // Only send changed fields
                     const updates = {};
                     if (this.shareForm.share_name) updates.share_name = this.shareForm.share_name;
                     if (this.shareForm.auth_mode) updates.auth_mode = this.shareForm.auth_mode;
@@ -284,71 +433,96 @@ function smbhostApp() {
                     updates.browseable = this.shareForm.browseable;
 
                     await this.apiPut('/api/shares/' + this.editingDriveUuid, updates);
-                    this.showToast('Share updated successfully');
+                    this.addToast('Share updated successfully');
                 }
 
                 this.showModal = false;
                 await Promise.all([this.refreshDrives(), this.refreshShares()]);
             } catch (e) {
-                this.showToast('Error: ' + e.message, 'error');
+                this.addToast('Error: ' + e.message, 'error');
+            } finally {
+                this.modalLoading = false;
             }
         },
 
-        async deleteShare(drive) {
-            if (!confirm(`Remove share for "${drive.label || drive.uuid.substring(0, 8)}"?`)) return;
+        confirmDeleteShare(drive) {
+            const name = drive.label || drive.uuid.substring(0, 8);
+            const shareName = drive.share?.share_name || name;
+            this.showConfirm(
+                'Remove Share',
+                `Remove the SMB share "${shareName}"? The drive data will not be affected.`,
+                () => this.deleteShare(drive.uuid)
+            );
+        },
 
-            try {
-                await this.apiDelete('/api/shares/' + drive.uuid);
-                this.showToast('Share removed');
-                await Promise.all([this.refreshDrives(), this.refreshShares()]);
-            } catch (e) {
-                this.showToast('Error: ' + e.message, 'error');
-            }
+        async deleteShare(driveUuid) {
+            await this.apiDelete('/api/shares/' + driveUuid);
+            this.addToast('Share removed');
+            await Promise.all([this.refreshDrives(), this.refreshShares()]);
         },
 
         // ── Settings ───────────────────────────────────────────────
         async saveSettings() {
+            this.settingsLoading = true;
             this.settingsSaved = false;
             this.settingsError = '';
             try {
-                // In a production app, this would hit a settings API endpoint
-                // For now, settings are applied via the config file
+                await this.apiPut('/api/system/config', this.settings);
                 this.settingsSaved = true;
-                setTimeout(() => { this.settingsSaved = false; }, 3000);
+                this.addToast('Settings saved');
+                setTimeout(() => { this.settingsSaved = false; }, 4000);
             } catch (e) {
                 this.settingsError = e.message;
+                this.addToast('Failed to save settings: ' + e.message, 'error');
+            } finally {
+                this.settingsLoading = false;
             }
         },
 
         // ── System Actions ─────────────────────────────────────────
+        confirmReloadSamba() {
+            this.showConfirm(
+                'Reload Samba',
+                'Reload the Samba configuration. Active connections will not be interrupted.',
+                () => this.reloadSamba()
+            );
+        },
+
         async reloadSamba() {
-            try {
-                await this.apiPost('/api/system/samba/reload', {});
-                this.showToast('Samba configuration reloaded');
-            } catch (e) {
-                this.showToast('Error: ' + e.message, 'error');
-            }
+            await this.apiPost('/api/system/samba/reload', {});
+            this.addToast('Samba configuration reloaded');
+            await this.refreshStatus();
+        },
+
+        confirmRestartSamba() {
+            this.showConfirm(
+                'Restart Samba',
+                'Restart Samba services (smbd + nmbd). Active file transfers will be interrupted!',
+                () => this.restartSamba()
+            );
         },
 
         async restartSamba() {
-            if (!confirm('Restart Samba services? Active connections will be interrupted.')) return;
-            try {
-                await this.apiPost('/api/system/samba/restart', {});
-                this.showToast('Samba services restarted');
-                await this.refreshStatus();
-            } catch (e) {
-                this.showToast('Error: ' + e.message, 'error');
-            }
+            await this.apiPost('/api/system/samba/restart', {});
+            this.addToast('Samba services restarted');
+            await this.refreshStatus();
         },
 
         async testSambaConfig() {
+            this.sambaTestLoading = true;
             try {
                 const data = await this.apiGet('/api/system/samba/test');
                 this.sambaTestOutput = data.output;
                 this.sambaTestValid = data.valid;
+                if (data.valid) {
+                    this.addToast('Samba configuration is valid');
+                }
             } catch (e) {
                 this.sambaTestOutput = 'Error: ' + e.message;
                 this.sambaTestValid = false;
+                this.addToast('Samba test failed: ' + e.message, 'error');
+            } finally {
+                this.sambaTestLoading = false;
             }
         },
     };
