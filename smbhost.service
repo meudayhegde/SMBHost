@@ -1,0 +1,31 @@
+[Unit]
+Description=SMBHost — Automatic SMB share server for attached drives
+Documentation=https://github.com/example/smbhost
+After=network.target network-online.target samba.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/opt/smbhost/venv/bin/python -m smbhost --bind 127.0.0.1 --port 8080
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smbhost
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/etc/samba /var/lib/samba /etc/smbhost /var/log/smbhost
+ReadOnlyPaths=/
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+
+[Install]
+WantedBy=multi-user.target
