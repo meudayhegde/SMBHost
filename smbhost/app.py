@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -159,33 +160,28 @@ def create_app(config: ConfigManager) -> FastAPI:
     if templates is not None:
         from fastapi import Request
 
+        _index_template = templates.env.get_template("index.html")
+
+        def _render_page(request: Request) -> HTMLResponse:
+            return HTMLResponse(
+                _index_template.render(request=request, version="0.1.0"),
+            )
+
         @app.get("/")
         async def index(request: Request):
-            return templates.TemplateResponse("index.html", {
-                "request": request,
-                "version": "0.1.0",
-            })
+            return _render_page(request)
 
         @app.get("/drives")
         async def drives_page(request: Request):
-            return templates.TemplateResponse("index.html", {
-                "request": request,
-                "version": "0.1.0",
-            })
+            return _render_page(request)
 
         @app.get("/settings")
         async def settings_page(request: Request):
-            return templates.TemplateResponse("index.html", {
-                "request": request,
-                "version": "0.1.0",
-            })
+            return _render_page(request)
 
         @app.get("/system")
         async def system_page(request: Request):
-            return templates.TemplateResponse("index.html", {
-                "request": request,
-                "version": "0.1.0",
-            })
+            return _render_page(request)
 
     # ── Static Files ─────────────────────────────────────────────────────
     if STATIC_DIR.exists():
