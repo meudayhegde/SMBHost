@@ -53,6 +53,12 @@ Issues = "https://github.com/example/smbhost/issues"
 [tool.setuptools.packages.find]
 include = ["smbhost*"]
 
+[tool.setuptools.package-data]
+smbhost = [
+    "templates/**",
+    "static/**",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"
