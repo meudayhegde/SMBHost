@@ -4,8 +4,6 @@ Creates the web application with all API routes, WebSocket support,
 static file serving, and lifecycle management for background services.
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 from contextlib import asynccontextmanager

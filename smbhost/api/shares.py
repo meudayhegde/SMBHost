@@ -4,8 +4,6 @@ Provides CRUD endpoints for managing SMB share configurations.
 Each operation updates the Samba configuration and reloads smbd.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 

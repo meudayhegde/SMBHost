@@ -4,8 +4,6 @@ Provides REST endpoints for listing and querying detected drives,
 and a WebSocket endpoint for real-time drive events.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Request
 
 router = APIRouter(prefix="/api/drives", tags=["drives"])

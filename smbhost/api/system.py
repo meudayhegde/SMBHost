@@ -3,8 +3,6 @@
 Provides status checks, log retrieval, and service control endpoints.
 """
 
-from __future__ import annotations
-
 import platform
 import time
 from datetime import timedelta
