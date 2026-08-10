@@ -27,6 +27,40 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+def _sync_configured_share_on_drive_added(
+    config: ConfigManager,
+    smb_manager: SMBManager,
+    drive: DriveInfo,
+) -> None:
+    """Re-apply a saved share when its drive is detected again."""
+    share = config.get_share(drive.uuid)
+    if share is None or not share.enabled:
+        return
+
+    if not drive.mount_point:
+        logger.info("Skipping auto-enable for %s: drive is not mounted", drive.uuid)
+        return
+
+    if share.mount_point != drive.mount_point or share.drive_label != drive.display_name:
+        previous_share = share.model_copy(deep=True)
+        updated_share = config.update_share(
+            drive.uuid,
+            mount_point=drive.mount_point,
+            drive_label=drive.display_name,
+        )
+        if updated_share is None:
+            logger.warning("Failed to refresh saved share metadata for drive %s", drive.uuid)
+            return
+
+        if not smb_manager.update_share(previous_share, updated_share):
+            config.add_share(previous_share)
+            logger.warning("Failed to auto-enable configured share for drive %s", drive.uuid)
+        return
+
+    if not smb_manager.add_share(share):
+        logger.warning("Failed to auto-enable configured share for drive %s", drive.uuid)
+
+
 # ── WebSocket Connection Manager ─────────────────────────────────────────────
 
 
@@ -113,6 +147,9 @@ def create_app(config: ConfigManager) -> FastAPI:
     # ── Register drive event callbacks ───────────────────────────────────
     def on_drive_event(action: str, drive: DriveInfo) -> None:
         """Callback invoked when a drive is added or removed."""
+        if action == "added":
+            _sync_configured_share_on_drive_added(config, smb_manager, drive)
+
         data = {
             "action": action,
             "uuid": drive.uuid,

@@ -65,6 +65,9 @@ async def reload_samba(request: Request) -> dict:
     """Reload Samba configuration."""
     smb = request.app.state.smb_manager
 
+    if not smb.write_config():
+        raise HTTPException(status_code=500, detail="Failed to write Samba config")
+
     if smb.reload_service():
         return {"detail": "Samba configuration reloaded"}
     raise HTTPException(status_code=500, detail="Failed to reload Samba")
@@ -74,6 +77,9 @@ async def reload_samba(request: Request) -> dict:
 async def restart_samba(request: Request) -> dict:
     """Restart Samba services."""
     smb = request.app.state.smb_manager
+
+    if not smb.write_config():
+        raise HTTPException(status_code=500, detail="Failed to write Samba config")
 
     if smb.restart_service():
         return {"detail": "Samba services restarted"}

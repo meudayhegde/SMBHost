@@ -243,17 +243,19 @@ class ConfigManager:
             if share.auth_mode == AuthMode.GUEST:
                 lines.append("   guest ok = yes")
                 lines.append("   guest only = yes")
-                lines.append("   force user = nobody")
-                lines.append("   force group = nogroup")
             elif share.auth_mode == AuthMode.GUEST_RO:
                 lines.append("   guest ok = yes")
                 lines.append("   guest only = yes")
                 lines.append("   read only = yes")
-                lines.append("   force user = nobody")
-                lines.append("   force group = nogroup")
             elif share.auth_mode == AuthMode.USER_PASS:
                 lines.append("   guest ok = no")
                 lines.append(f"   valid users = {share.username}")
+
+            # SMBHost often serves removable media mounted with restrictive
+            # ownership; serve filesystem operations as root after SMB auth so
+            # clients don't hit Unix-level EACCES on otherwise shared paths.
+            lines.append("   force user = root")
+            lines.append("   force group = root")
             lines.append("")
 
         return "\n".join(lines) + "\n"

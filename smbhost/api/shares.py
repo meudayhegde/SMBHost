@@ -115,12 +115,13 @@ async def create_share(body: ShareCreateRequest, request: Request) -> ShareRespo
         enabled=True,
     )
 
-    # Apply to Samba
-    if not smb.add_share(share):
-        raise HTTPException(status_code=500, detail="Failed to configure Samba share")
-
-    # Save to config
+    # Save first so Samba reconfiguration sees the new share.
     config.add_share(share)
+
+    # Apply to Samba, and roll back config if it fails.
+    if not smb.add_share(share):
+        config.remove_share(body.drive_uuid)
+        raise HTTPException(status_code=500, detail="Failed to configure Samba share")
 
     return _share_to_response(share)
 
@@ -140,13 +141,17 @@ async def update_share(drive_uuid: str, body: ShareUpdateRequest, request: Reque
     if not updates:
         return _share_to_response(old_share)
 
+    # Keep a copy so we can roll back if Samba reconfigure fails.
+    old_snapshot = old_share.model_copy(deep=True)
+
     # Apply update to config
     updated = config.update_share(drive_uuid, **updates)
     if updated is None:
         raise HTTPException(status_code=500, detail="Failed to update share")
 
-    # Apply to Samba
+    # Apply to Samba, and roll back config on failure.
     if not smb.update_share(old_share, updated):
+        config.add_share(old_snapshot)
         raise HTTPException(status_code=500, detail="Failed to reconfigure Samba")
 
     return _share_to_response(updated)
@@ -162,11 +167,14 @@ async def delete_share(drive_uuid: str, request: Request) -> dict:
     if share is None:
         raise HTTPException(status_code=404, detail="Share not found for this drive")
 
-    # Remove from Samba
-    if not smb.remove_share(share):
-        raise HTTPException(status_code=500, detail="Failed to remove Samba share")
+    # Remove from config first so Samba reconfiguration drops the section.
+    removed = config.remove_share(drive_uuid)
+    if not removed:
+        raise HTTPException(status_code=500, detail="Failed to update share config")
 
-    # Remove from config
-    config.remove_share(drive_uuid)
+    # Remove from Samba, and roll back config on failure.
+    if not smb.remove_share(share):
+        config.add_share(share)
+        raise HTTPException(status_code=500, detail="Failed to remove Samba share")
 
     return {"detail": "Share removed", "drive_uuid": drive_uuid}

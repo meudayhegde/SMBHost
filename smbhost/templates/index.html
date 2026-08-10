@@ -236,19 +236,37 @@
 
         <!-- ── DRIVES TAB ──────────────────────────────────────────── -->
         <div x-show="currentTab === 'drives'" x-cloak>
-            <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
-                <h2 class="text-xl font-semibold">Detected Drives</h2>
-                <div class="flex items-center gap-3">
-                    <!-- Search -->
-                    <div class="search-wrapper">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                        <input type="text" x-model="driveSearch" placeholder="Filter drives..." class="form-input text-sm" style="padding-left:2.5rem;width:220px;">
-                    </div>
-                    <button @click="refreshDrives()" class="btn btn-secondary btn-sm">
-                        <svg class="w-4 h-4" :class="loading.drives && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                        Refresh
-                    </button>
+            <section class="device-hero mb-6 animate-fade-in-up">
+                <div class="device-hero-main">
+                    <p class="device-kicker">Storage Inventory</p>
+                    <h2 class="device-title">Detected Drives</h2>
+                    <p class="device-subtitle">Manage connected devices and publish them as SMB shares in a few clicks.</p>
                 </div>
+                <div class="device-hero-stats">
+                    <div class="device-stat-pill">
+                        <span class="text-gray-500">Total</span>
+                        <strong x-text="drives.length"></strong>
+                    </div>
+                    <div class="device-stat-pill">
+                        <span class="text-gray-500">Mounted</span>
+                        <strong x-text="connectedDrivesCount"></strong>
+                    </div>
+                    <div class="device-stat-pill">
+                        <span class="text-gray-500">Shared</span>
+                        <strong x-text="activeSharesCount"></strong>
+                    </div>
+                </div>
+            </section>
+
+            <div class="device-toolbar mb-6">
+                <div class="search-wrapper device-search">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    <input type="text" x-model="driveSearch" placeholder="Search by label, UUID, path, or filesystem" class="form-input text-sm">
+                </div>
+                <button @click="refreshDrives()" class="btn btn-secondary btn-sm device-refresh">
+                    <svg class="w-4 h-4" :class="loading.drives && 'animate-spin'" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    Refresh
+                </button>
             </div>
 
             <!-- Loading -->
@@ -283,31 +301,39 @@
 
             <!-- Drive list -->
             <template x-if="filteredDrives.length > 0">
-                <div class="space-y-3 animate-fade-in">
+                <div class="device-grid animate-fade-in">
                     <template x-for="drive in filteredDrives" :key="drive.uuid">
                         <div class="drive-card">
                             <div class="drive-card-header">
                                 <div class="flex-1 min-w-0">
-                                    <div class="flex items-center gap-2 mb-1 flex-wrap">
+                                    <div class="flex items-center gap-2 mb-2 flex-wrap">
                                         <span class="drive-card-name" x-text="drive.label || 'Drive ' + drive.uuid.substring(0,8)"></span>
                                         <span x-show="drive.is_mounted" class="badge badge-success">mounted</span>
                                         <span x-show="!drive.is_mounted" class="badge badge-warning">not mounted</span>
                                     </div>
-                                    <div class="text-sm text-gray-400 space-y-0.5">
-                                        <div>Device: <span class="text-gray-300 font-mono text-xs" x-text="drive.device_path"></span></div>
-                                        <div>
-                                            <span class="badge badge-neutral mr-2" x-text="drive.fstype"></span>
+                                    <div class="drive-meta">
+                                        <div class="drive-meta-item">
+                                            <span class="text-gray-500">Device</span>
+                                            <span class="text-gray-300 font-mono text-xs" x-text="drive.device_path"></span>
+                                        </div>
+                                        <div class="drive-meta-item">
+                                            <span class="text-gray-500">Filesystem</span>
+                                            <span class="badge badge-neutral" x-text="drive.fstype"></span>
+                                        </div>
+                                        <div class="drive-meta-item">
+                                            <span class="text-gray-500">Size</span>
                                             <span class="text-gray-300" x-text="drive.size_human"></span>
                                         </div>
-                                        <div x-show="drive.mount_point">
-                                            Mount: <span class="text-gray-300 font-mono text-xs" x-text="drive.mount_point"></span>
+                                        <div class="drive-meta-item" x-show="drive.mount_point">
+                                            <span class="text-gray-500">Mount</span>
+                                            <span class="text-gray-300 font-mono text-xs" x-text="drive.mount_point"></span>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="flex items-center gap-2 flex-shrink-0">
+                                <div class="drive-actions">
                                     <!-- Shared -->
                                     <template x-if="drive.share && drive.share.configured">
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap justify-end">
                                             <span class="badge badge-purple" x-text="drive.share.share_name"></span>
                                             <button @click="editShare(drive)" class="btn btn-secondary btn-sm">Edit</button>
                                             <button @click="confirmDeleteShare(drive)" class="btn btn-danger btn-sm">Remove</button>
@@ -326,7 +352,7 @@
 
                             <!-- Connection info for shared drives -->
                             <template x-if="drive.share && drive.share.configured && drive.share.enabled">
-                                <div class="mt-3 pt-3 border-t border-gray-800 flex items-center gap-2 text-xs">
+                                <div class="drive-connection mt-3">
                                     <span class="text-gray-500">Connect:</span>
                                     <span class="conn-box py-1 px-2 text-xs flex-1 min-w-0" @click="copyToClipboard(getSmbUrl(drive.share.share_name))">
                                         <span class="truncate" x-text="getSmbUrl(drive.share.share_name)"></span>

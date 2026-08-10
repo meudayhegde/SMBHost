@@ -205,6 +205,27 @@ class TestConfigManager:
             conf = mgr.generate_smb_conf()
             assert "guest ok = no" in conf
             assert "valid users = bob" in conf
+            assert "force user = root" in conf
+            assert "force group = root" in conf
+
+    def test_generate_smb_conf_guest_forces_root_identity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg_path = Path(tmp) / "config.yaml"
+            mgr = ConfigManager(cfg_path)
+
+            mgr.add_share(ShareConfig(
+                drive_uuid="u-guest",
+                share_name="GuestShare",
+                mount_point="/mnt/guest",
+                auth_mode=AuthMode.GUEST,
+            ))
+
+            conf = mgr.generate_smb_conf()
+            assert "[GuestShare]" in conf
+            assert "guest ok = yes" in conf
+            assert "guest only = yes" in conf
+            assert "force user = root" in conf
+            assert "force group = root" in conf
 
     def test_disabled_share_not_in_conf(self):
         with tempfile.TemporaryDirectory() as tmp:
